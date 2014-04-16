@@ -926,7 +926,10 @@ class Convertor:
                 elif len(op.filenames) > 1:
                     outputfn = op.output + os.extsep + outputfmt.extension
                 else:
-                    outputfn = realpath(op.output, os.path.basename(outputfn) + os.extsep + outputfmt.extension)
+                    if op.output.endswith('/'):
+                        outputfn = realpath(op.output, os.path.basename(outputfn) + os.extsep + outputfmt.extension)
+                    else:
+                        outputfn = realpath(os.path.dirname(op.output), os.path.basename(op.output) + os.extsep + outputfmt.extension)
 
                 outputurl = unohelper.absolutize( self.cwd, unohelper.systemPathToFileUrl(outputfn) )
                 info(1, "Output file: %s" % outputfn)
@@ -941,7 +944,13 @@ class Convertor:
                         for i in range(oSheets.Count):
                                 sheet = oSheets.getByIndex(i)
                                 document.CurrentController.setActiveSheet(sheet)
-                                sheetoutputfn = outputfn + "-" + str(i) + os.extsep + outputfmt.extension
+                                if not op.output:
+                                    sheetoutputfn = outputfn + "-" + str(i) + os.extsep + outputfmt.extension
+                                else:
+                                    if op.output.endswith(os.pathsep):
+                                        sheetoutputfn = realpath(op.output, os.path.basename(outputfn) + "-" + str(i) + os.extsep + outputfmt.extension)
+                                    else:
+                                        sheetoutputfn = realpath(os.path.dirname(op.output), os.path.basename(op.output) + "-" + str(i) + os.extsep + outputfmt.extension)
                                 outputurl = unohelper.absolutize( self.cwd, unohelper.systemPathToFileUrl(sheetoutputfn))
                                 document.storeToURL(outputurl, tuple(outputprops))
                 else:
