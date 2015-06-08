@@ -516,6 +516,7 @@ class Options:
         self.listener = False
         self.nolaunch = False
         self.output = None
+        self.pagesize = None
         self.password = None
         self.pipe = None
         self.port = '2002'
@@ -531,7 +532,7 @@ class Options:
             opts, args = getopt.getopt (args, 'c:Dd:e:f:hi:Llo:np:s:T:t:vV',
                 ['connection=', 'debug', 'doctype=', 'export=', 'format=',
                  'help', 'import', 'listener', 'no-launch', 'output=',
-                 'outputpath', 'password=', 'pipe=', 'port=', 'server=',
+                 'outputpath', 'page-size=', 'password=', 'pipe=', 'port=', 'server=',
                  'timeout=', 'show', 'stdout', 'template', 'verbose',
                  'version'] )
         except getopt.error as exc:
@@ -595,6 +596,8 @@ class Options:
             elif opt in ['--outputpath']:
                 print('Warning: This option is deprecated by --output.', file=sys.stderr)
                 self.output = arg
+            elif opt in ['--page-size']:
+                self.pagesize = arg
             elif opt in ['--password']:
                 self.password = arg
             elif opt in ['--pipe']:
@@ -694,6 +697,8 @@ unoconv options:
       --pipe=name          alternative method of connection using a pipe
   -p, --port=port          specify the port (default: 2002)
                              to be used by client or listener
+      --page-size=string   specify a page size and orientation for the output file
+                             eg. --page-size A3,LANDSCAPE (default: A4,PORTRAIT)
       --password=string    provide a password to decrypt the document
   -s, --server=server      specify the server address (default: 127.0.0.1)
                              to be used by client or listener
@@ -770,6 +775,16 @@ class Convertor:
 #        for filter in self.filters.getElementNames():
 #            print filter
 #            #print dir(filter), dir(filter.format)
+
+    def _toProperties(self, options):
+        props = []
+        for key in options:
+            if isinstance(options[key], dict):
+                property = PropertyValue(key, 0, uno.Any("[]com.sun.star.beans.PropertyValue", (self._toProperties(options[key]))), 0)
+            else:
+                property = PropertyValue(key, 0, options[key], 0)
+            props.append(property)
+        return tuple(props)
 
     def getformat(self, inputfn):
         doctype = None
@@ -873,6 +888,39 @@ class Convertor:
             except AttributeError:
                 # the document doesn't implement the XLinkUpdate interface
                 pass
+
+            ### Set page size
+            phase = "set-pagesize"
+            if op.pagesize:
+                try:
+                    info(1, "Page Size: %s" % op.pagesize)
+                    # See http://www.openoffice.org/api/docs/common/ref/com/sun/star/view/PaperFormat.html
+                    PAPER_SIZE_MAP = {
+                        "A5": Size(14800,21000),
+                        "A4": Size(21000,29700),
+                        "A3": Size(29700,42000),
+                        "LETTER": Size(21590,27940),
+                        "LEGAL": Size(21590,35560),
+                        "TABLOID": Size(27900,43200)
+                    }
+                    # See http://www.openoffice.org/api/docs/common/ref/com/sun/star/view/PaperOrientation.html
+                    PAPER_ORIENTATION_MAP = {
+                        "PORTRAIT": PORTRAIT,
+                        "LANDSCAPE": LANDSCAPE
+                    }   
+                    paperSize,paperOrientation = op.pagesize.split(",")
+                    paperSize = PAPER_SIZE_MAP[paperSize]
+                    paperOrientation = PAPER_ORIENTATION_MAP[paperOrientation]
+                    printConfigs = {
+                        #'AllSheets': True,
+                        'Size': paperSize,
+                        'PaperFormat': USER,
+                        'PaperOrientation': paperOrientation
+                    }
+
+                    document.setPrinter(self._toProperties(printConfigs))
+                except:
+                    raise
 
             ### Update document indexes
             phase = "update-indexes"
@@ -1160,6 +1208,9 @@ if __name__ == '__main__':
     from com.sun.star.script import CannotConvertException
     from com.sun.star.uno import Exception as UnoException
     from com.sun.star.uno import RuntimeException
+    from com.sun.star.awt import Size
+    from com.sun.star.view.PaperOrientation import PORTRAIT, LANDSCAPE
+    from com.sun.star.view.PaperFormat import USER
 
     ### And now that we have those classes, build on them
     class OutputStream( unohelper.Base, XOutputStream ):
